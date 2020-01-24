@@ -1,7 +1,7 @@
 #  coding: utf-8
 import socketserver
-import sys
 import os
+import sys
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 #
@@ -28,106 +28,131 @@ import os
 
 # try: curl -v -X GET http://127.0.0.1:8080/
 
-BUFFER_SIZE = 2048
-
 
 class MyWebServer(socketserver.BaseRequestHandler):
 
     def handle(self):
-        self.method = ""            # GET, POST, PUT, DELETE, etc.
-        self.response = ""          # what we send back to user
-        self.filePath = "www"       # path to file such as html or css
-        # type of content to be transferred (either html or css)
-        self.contentType = "Content-Type: "
-
-        print(self.request)
-
+        self.request_is_valid = False
+        self.code = ""
+        self.f = ''
+        self.baseAddress = "http://localhost:8080"
         self.data = self.request.recv(1024).strip()
-        print("Client address:", self.client_address)
         print("Got a request of: %s\n" % self.data)
-        # print("Decoded: \r", self.data.decode())
         # self.request.sendall(bytearray("OK", 'utf-8'))
 
-        self.splitData()        # provides method and page
-        self.checkRequest()     # checks if GET request
-        self.checkPath()        # checks if file exists and specifies its location
-        self.checkFileType()    # checks file type (css or html)
+        self.method, self.directory = self.splitRequest(
+            self.data.decode())
 
-        # if there is a bad requst, send appropriate response
+        print("self.method: ", self.method)
+        print("self.directory: ", self.directory)
 
-        print("sending html")
-        f1 = open(self.filePath, 'r')
-        f1 = f1.read()
-        print(f1)
-        print("Content type:", self.contentType)
-        self.response = "HTTP/1.1 200 OK\r\n"
+        self.code = self.checkMethod(self.method)
 
-        print(self.response + self.contentType + f1)
-        self.fullResponse = (
-            self.response + self.contentType + f1).encode()
-        print(self.fullResponse)
-        # self.request.sendall(bytearray(
-        #     self.fullResponse, 'utf-8'))
-        # self.request.sendall(self.fullResponse)
-        # self.request.sendall(
-        #     bytearray('HTTP/1.1 200 OK\r\nContent-Type: text/css\r\nh1 {\n    color:orange;\n    text-align:center;\n}\r\n', 'utf-8'))
+        print("self.code: ", self.code)
 
-    def splitData(self):
-        try:
-            newData = self.data.decode().split('\r\n')
+        self.code, self.contentType, self.fileDir = self.checkDirectory(
+            self.directory)
 
-            # identify type of request
-            dataSplit = newData[0]
-            self.method = (dataSplit.split())[0]
-            self.page = (dataSplit.split())[1]
-            print("method: ", self.method)
-            # is equal to '/' with localhost:8080, '/deep' with localhost:8080/deep
-            print("page: ", self.page)
+        print("self.code: ", self.code)
+        print("self.contentType: ", self.contentType)
+        print("self.fileDir: ", self.fileDir)
 
-            if (self.page[len(self.page)-1] and len(self.page) > 1) == '/':
-                self.response = "HTTP/1.1 301 Moved Permanently"
-                # If last character is '/' redirect to appropriate site
+        print(self.fileDir)
 
-            return True
-        except:
-            return False
+        if self.code == "200 OK\r\n":
+            self.f = open(self.fileDir, 'r').read()
+            newRequest = self.generateRequest(
+                self.code, self.contentType, self.f)
 
-    def checkRequest(self):
-        if self.method != "GET":
-            # self.response = "HTTP/1.1 400 Bad Request\r\n\r\n"
-            return False
+        elif self.code == "301 Moved Permanently\r\n":
+            self.fileDir = "Location: " + self.fileDir
+            newRequest = self.generateRequest(
+                self.code, self.contentType, self.fileDir)
+
+        # print("HTTP/1.1 200 OK\r\n" + self.contentType + self.f)
+
+        print(newRequest)
+        self.request.sendall(newRequest.encode())
+
+    def splitRequest(self, requestData):
+        stringArr = requestData.split(" ")
+        print(stringArr)
+        return stringArr[0], stringArr[1]
+
+    def checkMethod(self, method):
+        print("CHECK METHOD")
+        if method != "GET":
+            self.request_is_valid = False
+            return "405"
         else:
-            return True
+            return "HTTP/1.1 200 OK\r\n"
 
-    def checkFileType(self):
-        # print(self.page)
-        print(self.filePath)
+    def checkDirectory(self, directory):
+        print("CHECK DIR")
 
-        # file, extension = os.path.splitext(self.page)
-        file, extension = os.path.splitext(self.filePath)
-        print("extension:", extension)
-        if extension == ".css":
-            print("got a css")
-            self.contentType += "text/css\r\n"
-        else:
-            print("got html")
-            self.contentType += "text/html\r\n"
+        # calls to localhost:8080/deep/
+        # REDIRECT 301
+        if directory[len(directory)-1] == '/' and (len(directory) > 1):
+            directory = self.baseAddress + directory
+            print("301")
+            return "301 Moved Permanently\r\n", "text/html\r\n" + "Location: " + directory[:len(directory)-1] + "\r\n", ''
 
-    def checkPath(self):
-        self.filePath = os.getcwd() + "/www" + self.page
+        # ALL calls BELOW are to localhost:8080 or localhost:8080/deep
+        fileDir = os.getcwd()
+        fileDir += "/www" + directory
 
-        # IF FILEPATH IS DIRECTORY, DISPLAY INDEX.HTML
-        if (os.path.isdir(self.filePath)):
-            if (len(self.page) == 1):
-                self.filePath += "index.html"
+        print("fileDir: ", fileDir)
+
+        extension = os.path.splitext(directory)
+        print("extension: ", extension)
+
+        if extension[1] == "":
+            # dealing with either "/", or "/deep" TO "/index.html" or "/deep/index.html"
+            if (fileDir[len(fileDir)-1] == '/'):
+                fileDir += "index.html"
+                print('ONE')
             else:
-                self.filePath += "/index.html"
-        # print("filepath:", self.filePath)
-        print(os.path.abspath(self.filePath))
+                print('TWO')
+                fileDir += "/index.html"
+            contentType = "text/html\r\n"
+            return "200 OK\r\n", contentType, fileDir
 
-        # if not os.path.exists(self.filePath):
-        #     self.response = "HTTP/1.1 404 Not Found Error\r\n\r\n"
-        #     print("path doesn't exist")
+        # ALL calls below are dealing with either "/index.html" or "/base.css" or "deep/deep.css"
+        elif extension[1] == ".css":
+            contentType = "text/css\r\n"
+            print("extension .css")
+            # base case: base.css is in www/
+            path = os.path.abspath(os.getcwd() + "/www")
+
+            print("fileDir: ", fileDir)
+
+            print(os.listdir(path))
+
+            for root, dirs, files, in os.walk(os.getcwd() + "/www"):
+                for name in files:
+                    if name == directory[1:]:
+                        print(os.path.join(root, name))
+                        fileDir = (os.path.join(root, name))
+
+            return "200 OK\r\n", contentType, fileDir
+
+        elif extension[1] == ".html":
+            contentType = "text/html\r\n"
+            return "200 OK\r\n", contentType, fileDir
+
+        else:
+            contentType = "text/html\r\n"
+            return "404", contentType, ''
+
+    def errorCheck(self, errorCode):
+        if errorCode == "":
+            return False
+
+    def generateRequest(self, code, contentType, content):
+        httpResponse = "HTTP/1.1 " + code + \
+            contentType + "\r\n" + content + "\r\n\r\n"
+        print(httpResponse)
+        return httpResponse
 
 
 if __name__ == "__main__":
@@ -140,6 +165,3 @@ if __name__ == "__main__":
     # Activate the server; this will keep running until you
     # interrupt the program with Ctrl-C
     server.serve_forever()
-
-
-# https://community.zerynth.com/t/how-to-render-a-file-html-and-to-handle-get-and-post-requests/996

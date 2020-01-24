@@ -69,6 +69,10 @@ class MyWebServer(socketserver.BaseRequestHandler):
             newRequest = self.generateRequest(
                 self.code, self.contentType, self.fileDir)
 
+        elif self.code == "404 Page Not Found\r\n":
+            newRequest = self.generateRequest(
+                self.code, self.contentType, self.fileDir)
+
         # print("HTTP/1.1 200 OK\r\n" + self.contentType + self.f)
 
         print(newRequest)
@@ -83,7 +87,10 @@ class MyWebServer(socketserver.BaseRequestHandler):
         print("CHECK METHOD")
         if method != "GET":
             self.request_is_valid = False
-            return "405"
+            newRequest = self.generateRequest(
+                "405 Method Not Allowed\r\n", "Content-Type: text/html\r\n", '')
+            self.request.sendall(newRequest.encode())
+            return "405 Method Not Allowed\r\n"
         else:
             return "HTTP/1.1 200 OK\r\n"
 
@@ -95,13 +102,44 @@ class MyWebServer(socketserver.BaseRequestHandler):
         if directory[len(directory)-1] == '/' and (len(directory) > 1):
             directory = self.baseAddress + directory
             print("301")
-            return "301 Moved Permanently\r\n", "text/html\r\n" + "Location: " + directory[:len(directory)-1] + "\r\n", ''
+            return "301 Moved Permanently\r\n", "Content-Type: text/html\r\n" + "Location: " + directory[:len(directory)-1] + "\r\n", ''
 
         # ALL calls BELOW are to localhost:8080 or localhost:8080/deep
         fileDir = os.getcwd()
         fileDir += "/www" + directory
 
         print("fileDir: ", fileDir)
+
+        # check if file exists
+        splitFileDir = fileDir.split("/")
+
+        print(splitFileDir[len(splitFileDir)-1])
+
+        fileSearch = ''
+
+        # https://www.tutorialspoint.com/python3/os_walk.htm
+
+        if len(directory) > 1:
+            for root, dirs, files, in os.walk(os.getcwd() + "/www"):
+                for name in files:
+                    if name == splitFileDir[len(splitFileDir)-1]:
+                        fileSearch = (os.path.join(root, name))
+                        print(os.path.join(root, name))
+
+                for name in dirs:
+                    if name == splitFileDir[len(splitFileDir)-1]:
+                        fileSearch = (os.path.join(root, name))
+                        print(os.path.join(root, name))
+
+            print("Filesearch3: ", fileSearch)
+            if fileSearch == '':
+                return "404 Page Not Found\r\n", "Content-Type: text/html", '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>404 Page Not Found</title>
+    </head>
+    </html>'''
 
         extension = os.path.splitext(directory)
         print("extension: ", extension)
@@ -114,12 +152,16 @@ class MyWebServer(socketserver.BaseRequestHandler):
             else:
                 print('TWO')
                 fileDir += "/index.html"
-            contentType = "text/html\r\n"
-            return "200 OK\r\n", contentType, fileDir
+            contentType = "Content-Type: text/html\r\n"
+
+            if os.path.isfile(fileDir):
+                return "200 OK\r\n", contentType, fileDir
+            else:
+                return "404 Page Not Found\r\n", "Content-Type: text/html\r\n", ''
 
         # ALL calls below are dealing with either "/index.html" or "/base.css" or "deep/deep.css"
         elif extension[1] == ".css":
-            contentType = "text/css\r\n"
+            contentType = "Content-Type: text/css\r\n"
             print("extension .css")
             # base case: base.css is in www/
             path = os.path.abspath(os.getcwd() + "/www")
@@ -128,21 +170,23 @@ class MyWebServer(socketserver.BaseRequestHandler):
 
             print(os.listdir(path))
 
-            for root, dirs, files, in os.walk(os.getcwd() + "/www"):
-                for name in files:
-                    if name == directory[1:]:
-                        print(os.path.join(root, name))
-                        fileDir = (os.path.join(root, name))
+            # for root, dirs, files, in os.walk(os.getcwd() + "/www"):
+            #     for name in files:
+            #         if name == directory[1:]:
+            #             print(os.path.join(root, name))
+            #             fileDir = (os.path.join(root, name))
 
-            return "200 OK\r\n", contentType, fileDir
+            if os.path.isfile(fileDir):
+                return "200 OK\r\n", contentType, fileDir
+            else:
+                return "404 Page Not Found\r\n", "Content-Type: text/html", ''
 
         elif extension[1] == ".html":
-            contentType = "text/html\r\n"
+            contentType = "Content-Type: text/html\r\n"
             return "200 OK\r\n", contentType, fileDir
 
         else:
-            contentType = "text/html\r\n"
-            return "404", contentType, ''
+            return "404 Page Not Found\r\n", "Content-Type: text/html\r\n", ''
 
     def errorCheck(self, errorCode):
         if errorCode == "":

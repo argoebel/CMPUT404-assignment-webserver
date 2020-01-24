@@ -35,7 +35,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
         self.request_is_valid = False
         self.code = ""
         self.f = ''
-        self.baseAddress = "http://localhost:8080"
+        self.baseAddress = "http://127.0.0.1:8080"
         self.data = self.request.recv(1024).strip()
         print("Got a request of: %s\n" % self.data)
         # self.request.sendall(bytearray("OK", 'utf-8'))
@@ -97,55 +97,58 @@ class MyWebServer(socketserver.BaseRequestHandler):
     def checkDirectory(self, directory):
         print("CHECK DIR")
 
-        # calls to localhost:8080/deep/
-        # REDIRECT 301
-        if directory[len(directory)-1] == '/' and (len(directory) > 1):
-            directory = self.baseAddress + directory
-            print("301")
-            return "301 Moved Permanently\r\n", "Content-Type: text/html\r\n" + "Location: " + directory[:len(directory)-1] + "\r\n", ''
-
-        # ALL calls BELOW are to localhost:8080 or localhost:8080/deep
-        fileDir = os.getcwd()
-        fileDir += "/www" + directory
-
-        print("fileDir: ", fileDir)
-
-        # check if file exists
-        splitFileDir = fileDir.split("/")
-
-        print(splitFileDir[len(splitFileDir)-1])
-
-        fileSearch = ''
-
-        # https://www.tutorialspoint.com/python3/os_walk.htm
-
-        if len(directory) > 1:
-            for root, dirs, files, in os.walk(os.getcwd() + "/www"):
-                for name in files:
-                    if name == splitFileDir[len(splitFileDir)-1]:
-                        fileSearch = (os.path.join(root, name))
-                        print(os.path.join(root, name))
-
-                for name in dirs:
-                    if name == splitFileDir[len(splitFileDir)-1]:
-                        fileSearch = (os.path.join(root, name))
-                        print(os.path.join(root, name))
-
-            print("Filesearch3: ", fileSearch)
-            if fileSearch == '':
-                return "404 Page Not Found\r\n", "Content-Type: text/html", '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>404 Page Not Found</title>
-    </head>
-    </html>'''
-
         extension = os.path.splitext(directory)
         print("extension: ", extension)
 
+        # calls to localhost:8080/deep
+        # REDIRECT 301
+        if directory[len(directory)-1] != '/' and (len(directory) > 1) and extension[1] == "":
+            directory = self.baseAddress + directory
+            print("301")
+            return "301 Moved Permanently\r\n", "Content-Type: text/html\r\n" + "Location: " + directory + "/\r\n", ''
+
+        # ALL calls BELOW are to localhost:8080 or localhost:8080/deep/
+        fileDir = os.getcwd()
+        fileDir += "/www" + directory
+
+    #     print("fileDir: ", fileDir)
+
+    #     # check if file exists
+    #     splitFileDir = fileDir.split("/")
+
+    #     print(splitFileDir[len(splitFileDir)-1])
+
+    #     fileSearch = ''
+
+    #     # https://www.tutorialspoint.com/python3/os_walk.htm
+
+    #     if len(directory) > 1:
+    #         for root, dirs, files, in os.walk(os.getcwd() + "/www"):
+    #             for name in files:
+    #                 if name == splitFileDir[len(splitFileDir)-1]:
+    #                     fileSearch = (os.path.join(root, name))
+    #                     print(os.path.join(root, name))
+
+    #             for name in dirs:
+    #                 if name == splitFileDir[len(splitFileDir)-1]:
+    #                     fileSearch = (os.path.join(root, name))
+    #                     print(os.path.join(root, name))
+
+    #         print("Filesearch3: ", fileSearch)
+    #         if fileSearch == '':
+    #             return "404 Page Not Found\r\n", "Content-Type: text/html", '''
+    # <!DOCTYPE html>
+    # <html>
+    # <head>
+    #     <title>404 Page Not Found</title>
+    # </head>
+    # </html>'''
+
+        # extension = os.path.splitext(directory)
+        # print("extension: ", extension)
+
         if extension[1] == "":
-            # dealing with either "/", or "/deep" TO "/index.html" or "/deep/index.html"
+            # dealing with either "/", "/deep/" or "/deep" TO "/index.html", "/deep/index.html", or 301 error
             if (fileDir[len(fileDir)-1] == '/'):
                 fileDir += "index.html"
                 print('ONE')
